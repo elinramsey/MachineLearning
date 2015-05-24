@@ -1,0 +1,68 @@
+---
+title: "Predicting Quality of Weight Lifts"
+output: html_document
+---
+##Intro
+The goal of this project is to predict the quality of how well participants lift weights. The source data is available from the following link. http://groupware.les.inf.puc-rio.br/har
+
+The data was gathered by various sensors attached to participants while experts watched to ensure that participants were lifting correctly, or in one of the specified incorrect manners.
+
+##Processing
+
+I first split the training data given into a training and testing subset using a standard 80/20 split.
+
+```{r, echo=FALSE}
+library(caret)
+library(randomForest)
+```
+
+
+```{r, cache=TRUE}
+
+data <- read.csv("pml-training.csv")
+set.seed(1389)
+inTrain <- createDataPartition(y = data$classe, p = 0.8, list = FALSE)
+training <- data[inTrain,]
+testing <- data[-inTrain,]
+```
+
+Upon inspection of the data, I noticed that over half of the columns were only populated for instansces at the beginning of the new window. As I had peeked at the data for the final submission, I knew that none of the tested entries were at the beginning of a new window and could be removed. It is better to take out unneded columns for performance issues.
+
+I removed the columns using regular expressions to find the aggregated columns.
+
+
+```{r}
+testing <- testing[,-grep("max_|var_|skewness_|amplitude_|avg_|stddev_|kurtosis_|min_",colnames(testing))]
+training <- training[,-grep("max_|var_|skewness_|amplitude_|avg_|stddev_|kurtosis_|min_",colnames(training))]
+```
+
+In order to ensure that the remaining columns were fully populated I imputed missing data using a knn closest neighbors aproach.
+
+```{r}
+set.seed(1390)
+preImp <- preProcess(training[,-c(1,2,3,4,5,6,7,60)],method = "knnImpute")
+clean <- predict(preImp,training[,-c(1,2,3,4,5,6,7,60)])
+clean$classe <- training$classe
+
+clean_test <- predict(preImp,testing[,-c(1,2,3,4,5,6,7,60)])
+clean_test$classe <- testing$classe
+```
+
+I chose a random forest model as they are known to be highly accurate in many cases. 
+
+```{r, cache=TRUE}
+set.seed(1444)
+model <- randomForest(classe ~.,  data = clean)
+model
+```
+
+From the model output, we can see an estimated error rate of 0.41%. This is likely overly optimistic, as this is an in sample error rate. However, having over 99% accuracy on this sort of problem seems really good to me.
+
+To validate the error rate, I apply the model to the testing set I set aside earlier.
+
+```{r}
+prediction <- predict(model,clean_test)
+confusionMatrix(clean_test$classe,prediction)
+```
+
+Here we see that accuracy is at 99.57%, which gives an error rate of 0.43% which is very close to what we saw above.
